@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Admin Panel</title>
+
+    <style>
+        body {
+            font-family: Arial;
+            background: #f4f6f9;
+            margin: 0;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1100px;
+            margin: auto;
+        }
+
+        h2 {
+            margin-bottom: 20px;
+        }
+
+        .card {
+            background: white;
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            margin-bottom: 20px;
+        }
+
+        input,
+        button {
+            padding: 10px;
+            margin: 5px 0;
+            border-radius: 8px;
+            border: 1px solid #ddd;
+            width: 100%;
+        }
+
+        button {
+            background: #2c7be5;
+            color: white;
+            cursor: pointer;
+            border: none;
+        }
+
+        button:hover {
+            opacity: 0.9;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        th,
+        td {
+            padding: 10px;
+            border-bottom: 1px solid #eee;
+            text-align: left;
+        }
+
+        .actions button {
+            width: auto;
+            margin-right: 5px;
+        }
+
+        .delete {
+            background: red;
+        }
+
+        .logout {
+            float: right;
+            color: red;
+            cursor: pointer;
+        }
+
+        /* modal */
+        #editModal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+        }
+
+        .modal-box {
+            background: white;
+            padding: 20px;
+            width: 320px;
+            margin: 100px auto;
+            border-radius: 10px;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+            gap: 15px;
+        }
+
+        #toast {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background: #2c7be5;
+            color: white;
+            padding: 12px 20px;
+            border-radius: 8px;
+            display: none;
+            font-size: 14px;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="container">
+
+        <h2>
+            Admin Panel
+            <span class="logout" onclick="logout()">Logout</span>
+        </h2>
+
+        <!-- Adding employee -->
+        <div class="card">
+            <h3>Add Employee</h3>
+
+            <form id="form">
+                <input id="name" placeholder="Name">
+                <input id="email" placeholder="Email">
+                <input id="password" placeholder="Password">
+                <input id="role" placeholder="Role (admin/employee)">
+                <input id="start" type="date">
+                <button type="submit">Add Employee</button>
+            </form>
+        </div>
+
+        <div class="card">
+            <h3>Leave Requests</h3>
+            <div class="grid" id="leaveAdmin"></div>
+        </div>
+
+        <!-- Table -->
+        <div class="card">
+            <h3>Employees</h3>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Email</th>
+                        <th>Role</th>
+                        <th>Sales</th>
+                        <th>Leaves</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="list"></tbody>
+            </table>
+        </div>
+
+    </div>
+
+    <!-- MODAL -->
+    <div id="editModal">
+        <div class="modal-box">
+            <h3>Edit Employee</h3>
+
+            <input id="editName" placeholder="Name">
+            <input id="editEmail" placeholder="Email">
+            <input id="editRole" placeholder="Role">
+            <input id="editSales" placeholder="Sales">
+            <input id="editLeaves" placeholder="Leaves">
+
+            <button onclick="saveEdit()">Save</button>
+            <button onclick="closeModal()" style="background:gray;">Cancel</button>
+        </div>
+    </div>
+
+
+    <script>
+
+        let currentId = null;
+
+        // ADD
+        document.getElementById("form").onsubmit = async (e) => {
+            e.preventDefault();
+
+            const res = await fetch("/admin/employee", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    name: name.value,
+                    email: email.value,
+                    password: password.value,
+                    role: role.value,
+                    start_date: start.value
+                })
+            });
+
+            const data = await res.json().catch(() => null);
+
+            if (data?.error) {
+                showToast(data.error);
+            } else {
+                form.reset();
+                loadEmployees();
+            }
+        };
+
+        // LOAD
+        function loadEmployees() {
+            fetch("/admin/employees")
+                .then(r => r.json())
+                .then(data => {
+                    document.getElementById("list").innerHTML = data.map(e => `
+            <tr>
+                <td>${e.name}</td>
+                <td>${e.email}</td>
+                <td>${e.role}</td>
+                <td>${e.sales_total}</td>
+                <td>${e.leave_balance}</td>
+                <td>
+                    <button onclick="openEdit(${e.id}, '${e.name}', '${e.email}', '${e.role}', ${e.sales_total}, ${e.leave_balance})">
+                        Edit
+                    </button>
+
+                    <button class="delete" onclick="deleteEmp(${e.id})">
+                        Delete
+                    </button>
+                </td>
+            </tr>
+        `).join("");
+                });
+        }
+
+        // OPEN MODAL
+        function openEdit(id, name, email, role, sales, leaves) {
+            currentId = id;
+
+            document.getElementById("editName").value = name;
+            document.getElementById("editEmail").value = email;
+            document.getElementById("editRole").value = role;
+            document.getElementById("editSales").value = sales;
+            document.getElementById("editLeaves").value = leaves;
+
+            document.getElementById("editModal").style.display = "block";
+        }
+
+        // SAVE
+        function saveEdit() {
+            fetch("/admin/employee/update", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    id: currentId,
+                    name: editName.value,
+                    email: editEmail.value,
+                    role: editRole.value,
+                    sales_total: Number(editSales.value),
+                    leave_balance: Number(editLeaves.value)
+                })
+            })
+                .then(r => r.json())
+                .then(data => {
+                    if (data.error) {
+                        showToast(data.error);
+                    } else {
+                        closeModal();
+                        loadEmployees();
+                    }
+                });
+        }
+
+        // CLOSE MODAL
+        function closeModal() {
+            document.getElementById("editModal").style.display = "none";
+        }
+
+        // DELETE
+        function deleteEmp(id) {
+            if (confirm("Delete employee?")) {
+                fetch("/admin/employee/delete", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ id })
+                })
+                    .then(r => r.json())
+                    .then(() => loadEmployees());
+            }
+        }
+        // Alert 
+        function showToast(msg) {
+            const t = document.getElementById("toast");
+            t.innerText = msg;
+            t.style.display = "block";
+
+            setTimeout(() => {
+                t.style.display = "none";
+            }, 3000);
+        }
+
+        // LOGOUT
+        function logout() {
+            fetch("/auth/logout")
+                .then(() => window.location = "/login.html");
+        }
+
+        function loadLeaveRequests() {
+            fetch("/admin/leaves")
+                .then(r => r.json())
+                .then(data => {
+                    document.getElementById("leaveAdmin").innerHTML = data.map(l => `
+            <div class="emp-card">
+
+                <h4>${l.name}</h4>
+                <p>${l.start_date} → ${l.end_date}</p>
+
+                <p>Status: 
+                    <b style="color:${l.status === "pending" ? "orange" :
+                            l.status === "approved" ? "green" : "red"
+                        }">
+                        ${l.status}
+                    </b>
+                </p>
+
+                <a href="/uploads/${l.file}" target="_blank">📄 View PDF</a>
+
+                ${l.status === "pending" ? `
+                        <div class="actions">
+                            <button onclick="approveLeave(${l.id})">Approve</button>
+                            <button onclick="rejectLeave(${l.id})" style="background:red;color:white;">
+                                Reject
+                            </button>
+                        </div>
+                    ` : ""
+                        }
+
+            </div>
+        `).join("");
+                });
+        }
+
+        function approveLeave(id) {
+            fetch("/admin/leave/" + id + "/approve", {
+                method: "POST"
+            })
+                .then(() => loadLeaveRequests());
+        }
+
+        function rejectLeave(id) {
+            fetch("/admin/leave/" + id + "/reject", {
+                method: "POST"
+            })
+                .then(() => loadLeaveRequests());
+        }
+        loadLeaveRequests();
+
+        loadEmployees();
+
+    </script>
+
+    <div id="toast"></div>
+</body>
+
+</html>
